@@ -46,7 +46,7 @@ nltk.download('averaged_perceptron_tagger_eng')
 
 """# **Reading Data**"""
 
-data_frame = pd.read_csv("//content/drive/MyDrive/NlP project/articles1.csv")
+data_frame = pd.read_csv("dataset/articles1.csv")
 data_frame.head()
 
 """# **Data Cleansing**
