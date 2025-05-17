@@ -37,6 +37,7 @@ import seaborn as sns
 from sklearn.cluster import AgglomerativeClustering
 from sklearn.cluster import DBSCAN
 from sklearn.datasets import make_moons
+from sklearn.metrics import silhouette_score
 
 nltk.download('punkt_tab')
 nltk.download('stopwords')
@@ -440,4 +441,119 @@ data_frame = data_frame.replace ({
 
 print("Number of unique values =", len(author_unique_values))
 data_frame["author"]
+
+"""# Text Representation and Topic Modeling
+## 1. TF-IDF Vectorization
+"""
+
+# Combine preprocessed content into single strings for TF-IDF
+data_frame['content_processed'] = data_frame['content'].apply(lambda x: ' '.join(x))
+
+# Create TF-IDF vectorizer
+tfidf_vectorizer = TfidfVectorizer(max_features=1000)  # Limit features to manage computational complexity
+tfidf_matrix = tfidf_vectorizer.fit_transform(data_frame['content_processed'])
+
+# Get feature names (words)
+feature_names = tfidf_vectorizer.get_feature_names_out()
+
+"""## 2. Hyperparameter Optimization"""
+
+# Find optimal number of clusters using elbow method and silhouette scores
+max_clusters = 15
+inertias = []
+silhouette_scores = []
+
+for k in range(2, max_clusters + 1):
+    kmeans = KMeans(n_clusters=k, random_state=42)
+    kmeans.fit(tfidf_matrix)
+    inertias.append(kmeans.inertia_)
+    silhouette_scores.append(silhouette_score(tfidf_matrix, kmeans.labels_))
+
+# Plot elbow curve
+plt.figure(figsize=(12, 5))
+plt.subplot(1, 2, 1)
+plt.plot(range(2, max_clusters + 1), inertias, marker='o')
+plt.xlabel('Number of clusters (k)')
+plt.ylabel('Inertia')
+plt.title('Elbow Method')
+
+# Plot silhouette scores
+plt.subplot(1, 2, 2)
+plt.plot(range(2, max_clusters + 1), silhouette_scores, marker='o')
+plt.xlabel('Number of clusters (k)')
+plt.ylabel('Silhouette Score')
+plt.title('Silhouette Analysis')
+plt.tight_layout()
+plt.show()
+
+# Find optimal k
+optimal_k = silhouette_scores.index(max(silhouette_scores)) + 2
+print(f"\nOptimal number of clusters based on silhouette score: {optimal_k}")
+
+"""## 3. Topic Modeling with Optimal K-Means"""
+
+# Function to print top words per cluster
+def print_top_words_per_cluster(cluster_centers, feature_names, n_words=10):
+    top_words = {}
+    for i, center in enumerate(cluster_centers):
+        # Get indices of top n words
+        top_indices = center.argsort()[-n_words:][::-1]
+        top_words[i] = [feature_names[idx] for idx in top_indices]
+    return top_words
+
+# Initialize and fit KMeans
+kmeans = KMeans(n_clusters=optimal_k, random_state=42)
+cluster_labels = kmeans.fit_predict(tfidf_matrix)
+
+# Add cluster labels to dataframe
+data_frame['cluster'] = cluster_labels
+
+# Get top words for each cluster
+top_words_per_cluster = print_top_words_per_cluster(kmeans.cluster_centers_, feature_names)
+
+"""## 4. Visualizations"""
+
+# Plot cluster sizes
+plt.figure(figsize=(10, 6))
+cluster_sizes = pd.Series(cluster_labels).value_counts().sort_index()
+plt.bar(range(optimal_k), cluster_sizes)
+plt.title('Distribution of Documents Across Clusters')
+plt.xlabel('Cluster')
+plt.ylabel('Number of Documents')
+plt.show()
+
+# Generate word clouds for each cluster
+for cluster_id in range(optimal_k):
+    cluster_docs = data_frame[data_frame['cluster'] == cluster_id]['content_processed']
+    if len(cluster_docs) > 0:
+        text = ' '.join(cluster_docs)
+        wordcloud = WordCloud(width=800, height=400, background_color='white').generate(text)
+        
+        plt.figure(figsize=(10, 5))
+        plt.imshow(wordcloud, interpolation='bilinear')
+        plt.axis('off')
+        plt.title(f'Word Cloud for Cluster {cluster_id}')
+        plt.show()
+        
+        print(f"\nTop words in Cluster {cluster_id}:")
+        print(", ".join(top_words_per_cluster[cluster_id]))
+
+"""## 5. Model Evaluation"""
+
+# Calculate silhouette score for clustering evaluation
+silhouette_avg = silhouette_score(tfidf_matrix, cluster_labels)
+print(f"\nSilhouette Score: {silhouette_avg}")
+
+# Split data for model validation
+train_matrix, test_matrix = train_test_split(tfidf_matrix, test_size=0.2, random_state=42)
+
+# Fit on training data
+train_labels = kmeans.fit_predict(train_matrix)
+
+# Predict on test data
+test_labels = kmeans.predict(test_matrix)
+
+# Calculate silhouette score on test data
+test_silhouette = silhouette_score(test_matrix, test_labels)
+print(f"Test Set Silhouette Score: {test_silhouette}")
 
