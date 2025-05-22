@@ -8,6 +8,9 @@ from nltk.tokenize import sent_tokenize, word_tokenize
 from nltk.corpus import stopwords, wordnet
 from nltk.stem import PorterStemmer, WordNetLemmatizer
 from nltk import pos_tag
+import nltk
+for pkg in ['punkt','stopwords','wordnet','averaged_perceptron_tagger']:
+        nltk.download(pkg)
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.cluster import KMeans
 from wordcloud import WordCloud
