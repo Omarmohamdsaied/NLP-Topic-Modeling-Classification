@@ -38,6 +38,7 @@ from sklearn.cluster import AgglomerativeClustering
 from sklearn.cluster import DBSCAN
 from sklearn.datasets import make_moons
 from sklearn.metrics import silhouette_score
+import pickle
 
 nltk.download('punkt_tab')
 nltk.download('stopwords')
@@ -534,6 +535,8 @@ for cluster_id in range(optimal_k):
         plt.axis('off')
         plt.title(f'Word Cloud for Cluster {cluster_id}')
         plt.show()
+        # save image
+        wordcloud.to_file(f'images/wordcloud_cluster_{cluster_id}.png')
         
         print(f"\nTop words in Cluster {cluster_id}:")
         print(", ".join(top_words_per_cluster[cluster_id]))
@@ -557,3 +560,10 @@ test_labels = kmeans.predict(test_matrix)
 test_silhouette = silhouette_score(test_matrix, test_labels)
 print(f"Test Set Silhouette Score: {test_silhouette}")
 
+
+# Save model
+with open('models/model.pkl', 'wb') as model_file:
+    pickle.dump(kmeans, model_file)
+# Save vectorizer
+with open('models/tfidf_vectorizer.pkl', 'wb') as vectorizer_file:
+    pickle.dump(tfidf_vectorizer, vectorizer_file)
