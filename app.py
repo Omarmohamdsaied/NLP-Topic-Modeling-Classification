@@ -1,108 +1,94 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 import re
-import string
 import pickle
+import nltk
 from nltk.tokenize import sent_tokenize, word_tokenize
 from nltk.corpus import stopwords, wordnet
 from nltk.stem import PorterStemmer, WordNetLemmatizer
 from nltk import pos_tag
-import nltk
-for pkg in ['punkt','stopwords','wordnet','averaged_perceptron_tagger']:
-        nltk.download(pkg)
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.cluster import KMeans
 from wordcloud import WordCloud
 
-# -- Utility functions ------------------------------------------------------
+# Ensure NLTK data is available
+for pkg in ['punkt', 'stopwords', 'wordnet', 'averaged_perceptron_tagger']:
+    nltk.download(pkg, quiet=True)
 
-def load_model(path='models/model.pkl'):
+# Initialize heavy objects once
+STOPWORDS = set(stopwords.words('english'))
+STEMMER = PorterStemmer()
+LEMMATIZER = WordNetLemmatizer()
+POS_MAP = {'N': wordnet.NOUN, 'V': wordnet.VERB, 'J': wordnet.ADJ, 'R': wordnet.ADV}
+
+# Cache model & vectorizer loads
+@st.cache_resource
+def load_vectorizer(path: str = 'models/tfidf_vectorizer.pkl') -> TfidfVectorizer:
     with open(path, 'rb') as f:
         return pickle.load(f)
 
-def load_vectorizer(path='models/tfidf_vectorizer.pkl'):
+@st.cache_resource
+def load_model(path: str = 'models/model.pkl') -> KMeans:
     with open(path, 'rb') as f:
         return pickle.load(f)
 
-@st.cache_data
-def preprocess_text(text):
-    # lowercase
+def preprocess_text(text: str) -> str:
     text = text.lower()
-    # remove HTML tags
     text = re.sub(r'<.*?>', '', text)
-    # remove URLs
     text = re.sub(r'https?://\S+|www\.\S+', '', text)
-    # tokenize sentences then words
-    words = []
+    tokens = []
     for sent in sent_tokenize(text):
-        words.extend(word_tokenize(sent))
-    # remove stopwords & punctuation & non-alpha
-    stop = set(stopwords.words('english'))
-    cleaned = [w for w in words if w.isalpha() and w not in stop]
-    # stemming + lemmatization
-    stemmer = PorterStemmer()
-    lemmatizer = WordNetLemmatizer()
-    pos_map = { 'N': wordnet.NOUN, 'V': wordnet.VERB, 'J': wordnet.ADJ, 'R': wordnet.ADV }
+        tokens.extend(word_tokenize(sent))
+    filtered = [w for w in tokens if w.isalpha() and w not in STOPWORDS]
     processed = []
-    for w in cleaned:
-        w_stem = stemmer.stem(w)
-        p = pos_tag([w_stem])[0][1][0]
-        wn = pos_map.get(p, wordnet.NOUN)
-        processed.append(lemmatizer.lemmatize(w_stem, wn))
+    for w in filtered:
+        stem = STEMMER.stem(w)
+        pos = pos_tag([stem])[0][1][0]
+        wn_pos = POS_MAP.get(pos, wordnet.NOUN)
+        processed.append(LEMMATIZER.lemmatize(stem, wn_pos))
     return ' '.join(processed)
-
-# -- Main app ---------------------------------------------------------------
 
 def main():
     st.title("Topic Modeling Explorer")
     st.sidebar.header("Settings")
-    menu = st.sidebar.selectbox("Choose action:", ["Analyze CSV", "Predict Single Text"])
+    action = st.sidebar.selectbox("Action:", ["Analyze CSV", "Predict Single Text"])
 
-    # Load models once
     vectorizer = load_vectorizer()
     model = load_model()
     feature_names = vectorizer.get_feature_names_out()
 
-    if menu == "Analyze CSV":
-        uploaded = st.file_uploader("Upload articles CSV", type=['csv'])
+    if action == "Analyze CSV":
+        uploaded = st.file_uploader("Upload CSV file", type='csv')
         if uploaded is not None:
             df = pd.read_csv(uploaded)
-            st.write("Raw data:", df.head())
-            # preprocess content column
+            st.write("Raw data", df.head())
             df['processed'] = df['content'].fillna('').apply(preprocess_text)
             X = vectorizer.transform(df['processed'])
-            clusters = model.predict(X)
-            df['cluster'] = clusters
-            st.write("Cluster assignments:" , df[['title','cluster']].head())
-            # show distribution
+            df['cluster'] = model.predict(X)
+            st.write("Cluster assignments", df[['title', 'cluster']].head())
             st.bar_chart(df['cluster'].value_counts().sort_index())
-            # top words per cluster
-            topn = st.slider("Top words per cluster", min_value=5, max_value=20, value=10)
-            centers = model.cluster_centers_
-            top_words = {}
-            for i, center in enumerate(centers):
+
+            topn = st.slider("Top words per cluster", 5, 20, 10)
+            for idx, center in enumerate(model.cluster_centers_):
                 inds = center.argsort()[-topn:][::-1]
-                top_words[i] = [feature_names[j] for j in inds]
-            for cid, words in top_words.items():
-                st.write(f"Cluster {cid}:", ", ".join(words))
-                # word cloud
+                words = [feature_names[i] for i in inds]
+                st.write(f"Cluster {idx}:", ', '.join(words))
                 wc = WordCloud(width=400, height=200).generate(' '.join(words))
-                st.image(wc.to_array(), caption=f"WordCloud: Cluster {cid}")
+                st.image(wc.to_array(), caption=f"WordCloud Cluster {idx}")
 
     else:
         text = st.text_area("Enter text to classify")
-        if st.button("Predict topic") and text:
+        if st.button("Predict topic") and text.strip():
             proc = preprocess_text(text)
             vec = vectorizer.transform([proc])
             pred = model.predict(vec)[0]
             st.write(f"Predicted cluster: {pred}")
-            # show top words in cluster
+
+            topn = st.number_input("Words to show", 5, 20, 10)
             center = model.cluster_centers_[pred]
-            topn = st.number_input("Words to show", min_value=5, max_value=20, value=10)
             inds = center.argsort()[-topn:][::-1]
-            words = [feature_names[j] for j in inds]
-            st.write("Topic words:", ", ".join(words))
+            words = [feature_names[i] for i in inds]
+            st.write("Topic words:", ', '.join(words))
 
 if __name__ == "__main__":
     main()
