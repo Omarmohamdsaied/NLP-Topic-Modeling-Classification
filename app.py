@@ -11,15 +11,8 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.cluster import KMeans
 from wordcloud import WordCloud
 
-# Make sure the required NLTK resources are actually present
-RESOURCES = {
-    'punkt':      'tokenizers/punkt_tab/',
-    'stopwords':  'corpora/stopwords.zip',
-    'wordnet':    'corpora/wordnet.zip',
-    'averaged_perceptron_tagger': 'taggers/averaged_perceptron_tagger.zip',
-}
-
-for pkg, path in RESOURCES.items():
+# Ensure NLTK data is available
+for pkg in ['punkt_tab', 'stopwords', 'wordnet', 'averaged_perceptron_tagger_eng']:
     nltk.download(pkg, quiet=True)
 
 # Initialize heavy objects once
