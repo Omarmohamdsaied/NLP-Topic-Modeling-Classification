@@ -13,17 +13,14 @@ from wordcloud import WordCloud
 
 # Make sure the required NLTK resources are actually present
 RESOURCES = {
-    'punkt':      'tokenizers/punkt/english.pickle',
+    'punkt':      'tokenizers/punkt_tab/',
     'stopwords':  'corpora/stopwords.zip',
     'wordnet':    'corpora/wordnet.zip',
     'averaged_perceptron_tagger': 'taggers/averaged_perceptron_tagger.zip',
 }
 
 for pkg, path in RESOURCES.items():
-    try:
-        nltk.data.find(path)
-    except LookupError:
-        nltk.download(pkg, quiet=True)
+    nltk.download(pkg, quiet=True)
 
 # Initialize heavy objects once
 STOPWORDS = set(stopwords.words('english'))
